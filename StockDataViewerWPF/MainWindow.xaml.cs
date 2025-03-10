@@ -15,6 +15,8 @@ using System.Windows.Shapes;
 using ScottPlot;
 using ScottPlot.WPF;
 using System.Diagnostics;
+using ScottPlot.Plottables;
+using OpenTK.Graphics.OpenGL;
 
 namespace StockDataViewerWPF
 {
@@ -216,10 +218,6 @@ namespace StockDataViewerWPF
 
         private WpfPlot setDateTicks(WpfPlot plot, List<OHLC> stockData)
         {
-            //Add the OHLC data to the chart and display dates on the bottom
-            var candlePlot = plot.Plot.Add.Candlestick(stockData);
-            //Set the plot to only display data in sequential order without gaps
-            candlePlot.Sequential = true;
 
             //Displaying the candlesticks without gaps in between for unrecorded dates
             //(Sourced from the ScottPlot website's cookbook from "Candlestick Chart Without Gaps")
@@ -261,6 +259,11 @@ namespace StockDataViewerWPF
                 stockData.Add(stock);
             }
 
+            //Add the OHLC data to the chart and display dates on the bottom
+            var candlePlot = wpfPlot.Plot.Add.Candlestick(stockData);
+            //Set the plot to only display data in sequential order without gaps
+            candlePlot.Sequential = true;
+
             //Call function to set date ticks for the chart
             wpfPlot = setDateTicks(wpfPlot, stockData);
 
@@ -293,6 +296,11 @@ namespace StockDataViewerWPF
                 stockData.Add(stock);
             }
 
+            //Add the OHLC data to the chart and display dates on the bottom
+            var candlePlot = wpfPlot.Plot.Add.Candlestick(stockData);
+            //Set the plot to only display data in sequential order without gaps
+            candlePlot.Sequential = true;
+
             //Call function to set date ticks for the chart
             wpfPlot = setDateTicks(wpfPlot, stockData);
 
@@ -302,6 +310,35 @@ namespace StockDataViewerWPF
 
             //Setting the title of the chart
             wpfPlot.Plot.Axes.Title.Label.Text = fileName;
+
+            //Setting up a mouse move event to display an annotation showing the currently hovered data
+            wpfPlot.MouseMove += (s, e) =>
+            {
+                //If an annotation was added already, remove it to prevent annotations from stacking
+                if (wpfPlot.Plot.PlottableList.ToArray().Last().GetType() == typeof(ScottPlot.Plottables.Annotation))
+                {
+                    wpfPlot.Plot.Remove(wpfPlot.Plot.PlottableList.ToArray().Last());
+                }
+                //Get the current pixel position of the mouse on the current plot
+                Pixel mousePixel = new(e.GetPosition(wpfPlot).X, e.GetPosition(wpfPlot).Y);
+                //Convert pixel location into coordinates
+                Coordinates mouseLocation = wpfPlot.Plot.GetCoordinates(mousePixel);
+                try
+                {
+                    //Get the nearest OHLC object to the coordinates
+                    ValueTuple<int, OHLC> nearest = (ValueTuple<int, OHLC>)candlePlot.GetOhlcNearX(mouseLocation.X);
+                    OHLC nearestCS = nearest.Item2;
+                    DataGrid_StockData.SelectedItem = DataGrid_StockData.Items[nearest.Item1];
+                    DataGrid_StockData.ScrollIntoView(DataGrid_StockData.Items[nearest.Item1]);
+                    //Set annotation to display data of OHLC object in top right corner of chart
+                    wpfPlot.Plot.Add.Annotation($"Date - {nearestCS.DateTime}, Low - ${nearestCS.Low}, High - ${nearestCS.High}, Open - ${nearestCS.Open}, Close - ${nearestCS.Close}", Alignment.UpperRight);
+                    wpfPlot.Refresh();
+                //If the nearest operation returned null, simply refresh the chart
+                } catch (InvalidOperationException)
+                {
+                    wpfPlot.Refresh();
+                }
+            };
 
             //Set the content of the tab equal to the plot
             tabItem.Content = wpfPlot;
@@ -326,4 +363,6 @@ namespace StockDataViewerWPF
         #endregion
 
     }
+
+    
 }
